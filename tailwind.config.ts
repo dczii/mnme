@@ -11,6 +11,14 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        "light-gray": "#dadade",
+        "dark-brown": "#442e26",
+        "medium-brown": "#7e5233",
+        "light-brown": "#b98753",
+      },
+      backgroundImage: {
+        "gradient-company": "linear-gradient(135deg, #dadade, #b98753)",
+        "gradient-title": "linear-gradient(90deg, #442e26, #b98753)",
       },
     },
   },

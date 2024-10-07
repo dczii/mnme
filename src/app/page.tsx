@@ -1,101 +1,148 @@
-import Image from "next/image";
+"use client";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { motion, AnimatePresence, useScroll } from "framer-motion";
+import classNames from "classnames";
+
+const ITEMS_PER_PAGE = 5;
+
+interface Company {
+  id: number;
+  name: string;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanies, setSelectedCompanies] = useState<number[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState<number>(1);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const { scrollY } = useScroll();
+  const [isAtTop, setIsAtTop] = useState(false);
+
+  useEffect(() => {
+    return scrollY.onChange((latest) => {
+      setIsAtTop(latest > 0);
+    });
+  }, [scrollY]);
+
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastCompanyElementRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (loading) return;
+      if (observer.current) observer.current.disconnect();
+      observer.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          setPage((prevPage) => prevPage + 1);
+        }
+      });
+      if (node) observer.current.observe(node);
+    },
+    [loading]
+  );
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/companies`);
+        if (!res.ok) {
+          throw new Error("Failed to fetch companies");
+        }
+        const data = await res.json();
+        setCompanies(data);
+      } catch (error: unknown) {
+        // Type guard to check if error is an instance of Error
+        if (error instanceof Error) {
+          setError(error.message); // Safely use the error message
+        } else {
+          setError("An unknown error occurred"); // Handle cases where error is not an instance of Error
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const handleSelect = (id: number) => {
+    setSelectedCompanies((prev) =>
+      prev.includes(id) ? prev.filter((companyId) => companyId !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteRequest = () => {
+    // Filter out the selected companies from the list
+    setCompanies((prevCompanies) =>
+      prevCompanies.filter((company) => !selectedCompanies.includes(company.id))
+    );
+    // Reset the selected companies after deletion
+    setSelectedCompanies([]);
+  };
+
+  const visibleCompanies = companies.slice(0, page * ITEMS_PER_PAGE);
+  const allDataIsVisible = visibleCompanies.length >= companies.length;
+
+  return (
+    <div className='container mx-auto p-4'>
+      <motion.header
+        className='text-2xl font-bold mb-4 text-white flex justify-between items-center sticky top-0 bg-gradient-title z-10 px-6'
+        style={{
+          borderRadius: isAtTop ? "0 0 8px 8px" : "8px",
+        }}
+      >
+        Company Dashboard
+        <button
+          onClick={handleDeleteRequest}
+          className='text-white hover:bg-medium-brown transition p-4 rounded-r-lg cursor-pointer'
+          disabled={selectedCompanies.length === 0}
+          test-id={`selected-${selectedCompanies.length}`}
+        >
+          Delete Selected{selectedCompanies.length > 0 && ` (${selectedCompanies.length})`}
+        </button>
+      </motion.header>
+      {loading && page === 1 ? (
+        <p className='text-medium-brown'>Loading...</p>
+      ) : error ? (
+        <p className='text-red-500'>{error}</p>
+      ) : (
+        <div className='px-6 py-3'>
+          <div className='grid grid-cols-12 gap-5'>
+            <AnimatePresence initial={false}>
+              {visibleCompanies.map((company, index) => (
+                <motion.div
+                  key={company.id}
+                  data-testid={`company-${company.id}`}
+                  ref={index === visibleCompanies.length - 1 ? lastCompanyElementRef : null}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    duration: 0.5,
+                  }}
+                  className={classNames(
+                    selectedCompanies.includes(company.id) ? "selected" : "",
+                    "col-span-12 sm:col-span-6 lg:col-span-4 bg-white border border-light-brown shadow-md p-4 rounded-lg flex flex-col items-start cursor-pointer"
+                  )}
+                  onClick={() => handleSelect(company.id)}
+                >
+                  <div className='flex items-center space-x-4'>
+                    <input
+                      type='checkbox'
+                      checked={selectedCompanies.includes(company.id)}
+                      className='h-4 w-4 text-medium-brown cursor-pointer'
+                      onChange={() => handleSelect(company.id)}
+                    />
+                    <span className='text-lg font-semibold text-dark-brown'>{company.name}</span>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+          {loading && <p className='mt-4 text-medium-brown'>Loading more companies...</p>}
+          {allDataIsVisible && <p className='mt-4 text-medium-brown'>No more companies to load</p>}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      )}
     </div>
   );
 }
